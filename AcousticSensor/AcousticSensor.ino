@@ -165,7 +165,7 @@ void TcpStreamOut(void *arg){
     
     serverAddr.sin_len = sizeof(serverAddr);
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(4000);
+    serverAddr.sin_port = htons(SERVER_PORT);
     inet_pton(AF_INET, SERVER_IP, &(serverAddr.sin_addr));
     
     int s = lwip_socket(AF_INET, SOCK_STREAM, 0);
@@ -191,6 +191,9 @@ void TcpStreamOut(void *arg){
     while(1){
       if(xQueueReceive(xTcpQueue, &packetIndex, portMAX_DELAY)){
         pd_rgb_led(PD_GREEN);
+        PRINT_DEBUG("Packet Length:");
+        PRINT_DEBUGLN(PACKET_LENGTH);
+
         if(lwip_write(s, (uint8_t *)&capturedEvent[packetIndex], PACKET_LENGTH) < 0){
           // an error occurred during write.
           // did we disconnect? break out and try to reconnect.

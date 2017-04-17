@@ -16,7 +16,8 @@
 // TODO: Update these values to the proper network / server IP
 #define WIFI_SSID "PowerDue"
 #define WIFI_PASS "powerdue"
-#define SERVER_IP "10.230.12.1"  // typically the IP of your Laptop (e.g. "10.230.12.1")
+#define SERVER_IP "10.230.12.25"  // typically the IP of your Laptop (e.g. "10.230.12.1")
+#define SERVER_PORT 1881
 
 /*
  * Clock parameters
@@ -36,7 +37,7 @@
   #define MASTER_CLOCK_IP ""    // e.g. "10.230.12.10"
 #endif
 
-#define SYNC_FREQUENCY  10000   // Time period between NTP synchronization trials (in milliseconds)
+#define SYNC_FREQUENCY  20000   // Time period between NTP synchronization trials (in milliseconds)
 
 #define NTP_TASK_PRIORITY   1   // priority of NTP synchronization tasks
 
