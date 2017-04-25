@@ -15,9 +15,19 @@
 #include "packet.h"
 #include "synchronization.h"
 
+#define CODE_ADC_SAMPLE_RATE 1
+#define CODE_TRIGGER_DEFAULT_STD_DISTANCE 2
+#define CODE_SYNC_FREQUENCY 3
+
 QueueHandle_t xBufferQueue;
 QueueHandle_t xTcpQueue;
 ADCTrigger trigger;
+
+
+uint32_t adc_sample_rate = ADC_SAMPLE_RATE;
+float trigger_default_std_distance = TRIGGER_DEFAULT_STD_DISTANCE;
+uint32_t sync_frequency = SYNC_FREQUENCY;
+
 
 // store the timestamps for each buffer to report later
 tstamp_t tstamps[NUM_BUFFERS];
@@ -25,6 +35,13 @@ tstamp_t tstamps[NUM_BUFFERS];
 #define PACKET_BUFFER_COUNT 2   // packet buffers
 
 AcousticEvent_t capturedEvent[PACKET_BUFFER_COUNT];
+
+
+/* The size of the buffer in which the downlink packet is stored. */
+#define MAX_DOWNLINK_PACKET  2048
+
+#define CMD_REPORT_STATUS 1
+#define CMD_CHANGE_SETTING 2
 
 /*
  *  Initialization Routines
@@ -43,7 +60,7 @@ inline void initPacket(){
     }
     capturedEvent[p].clockOffset = 0;
     capturedEvent[p].networkDelay = 0;
-    capturedEvent[p].samplingFrequency = ADC_SAMPLE_RATE;  
+    capturedEvent[p].samplingFrequency = adc_sample_rate;  
     capturedEvent[p].pktFooter = EVENT_PACKET_FOOTER;
   }  
 }
@@ -64,7 +81,7 @@ inline void initADC(){
   
   ADCSampler.init();
   ADCSampler.setChannel(ADC_CHANNEL_MIC);
-  ADCSampler.setSamplingFrequency(ADC_SAMPLE_RATE);
+  ADCSampler.setSamplingFrequency(adc_sample_rate);
   ADCSampler.setInterruptCallback(adc_full);
   ADCSampler.reset();
   ADCSampler.start();
@@ -186,21 +203,34 @@ void TcpStreamOut(void *arg){
     pd_rgb_led(PD_RED);
     
     uint8_t packetIndex;
+    char buf[MAX_DOWNLINK_PACKET];
     
     // inner loop to handle sending data
     while(1){
+
+      // receive
+      int n = lwip_recv(s, buf, MAX_DOWNLINK_PACKET, MSG_DONTWAIT);
+      if(n > 0) {
+        decodeCommand(buf, n);
+      }
+
+      // send
       if(xQueueReceive(xTcpQueue, &packetIndex, portMAX_DELAY)){
         pd_rgb_led(PD_GREEN);
-        PRINT_DEBUG("Packet Length:");
-        PRINT_DEBUGLN(PACKET_LENGTH);
+        
+        // add packet length field for assembling TCP packet in the node red adapter,
+        // but maybe it should look for EVENT_PACKET_FOOTER instead
+        uint16_t packet_length = PACKET_LENGTH;
+        capturedEvent[packetIndex].pktLength = packet_length;
 
-        if(lwip_write(s, (uint8_t *)&capturedEvent[packetIndex], PACKET_LENGTH) < 0){
+        if(lwip_write(s, (uint8_t *)&capturedEvent[packetIndex], packet_length) < 0){
           // an error occurred during write.
           // did we disconnect? break out and try to reconnect.
           break;
         }
         pd_rgb_led(PD_RED);
       }
+
     }
     
     // close socket after everything is done
@@ -209,6 +239,78 @@ void TcpStreamOut(void *arg){
     pd_rgb_led(PD_OFF);
   }
   
+}
+
+void decodeCommand(char* buf, int n) {
+  PRINT_DEBUG("Received bytes: ");
+  PRINT_DEBUGLN(n);
+  uint16_t config_id;
+  uint32_t start_time;
+  uint16_t param_num;
+
+  uint16_t index = 2; // skip firmware version
+  while(index < n) {
+    uint16_t cmd_code = *((uint16_t *) &buf[index]); 
+    index += 2;
+    uint32_t field_len = *((uint16_t *) &buf[index]); 
+    index += 2;
+
+    switch(cmd_code) {
+      case CMD_REPORT_STATUS:
+        break;
+      case CMD_CHANGE_SETTING:
+        PRINT_DEBUGLN("Change settings");
+        // ignored
+        config_id = *((uint16_t *) &buf[index]); 
+        index += 2;
+        // ignored
+        start_time = *((uint32_t *) &buf[index]); 
+        index += 4;
+        param_num = *((uint16_t *) &buf[index]); 
+        index += 2;
+        
+        changeSetting(start_time, param_num, buf, &index);
+        break;
+      default:
+        // don't regonize the command, jump over
+        index += field_len;
+        break;
+    }
+  }
+}
+
+void changeSetting(uint32_t start_time, uint16_t param_num, char* buf, uint16_t* index) {
+  for (int i = 0; i < param_num; ++i) {
+    uint16_t param_code = *((uint16_t *) &buf[*index]); 
+    (*index) += 2;
+    PRINT_DEBUG("param:");
+    PRINT_DEBUGLN(param_code);
+
+
+    switch(param_code) {
+      case CODE_ADC_SAMPLE_RATE:
+        adc_sample_rate = *((uint32_t *) &buf[*index]); 
+        ADCSampler.stop();
+        initADC();
+        
+        initPacket(); // update packet header
+        break;
+      case CODE_TRIGGER_DEFAULT_STD_DISTANCE:
+        trigger_default_std_distance = *((float *) &buf[*index]);
+        PRINT_DEBUG("std distance:");
+        PRINT_DEBUGLN(trigger_default_std_distance); 
+        trigger.setStdDistance(trigger_default_std_distance);
+        break;
+      case CODE_SYNC_FREQUENCY:
+        #if !MASTER_CLOCK
+          sync_frequency = *((uint32_t *) &buf[*index]); 
+          changeSyncPeriod((uint32_t)sync_frequency);
+        #endif
+      break;
+    }
+    (*index) += 4;
+  }
+
 }
 
 void onError(int errorCode){

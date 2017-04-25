@@ -13,5 +13,6 @@
 
 /* Use this to initialize the tasks related to synchronizing clocks */
 void startSyncTasks(int priority);  // set priority of ntp tasks
+void changeSyncPeriod(uint32_t period); // change the period of synchronization timer
 
 #endif // _SYNCHRONIZATION_H

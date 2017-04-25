@@ -15,6 +15,7 @@ int getNtpSocket();
 #else
   void vNtpRequestCallback( TimerHandle_t pxTimer );
   void vNtpSlaveReceiveTask(void *arg);
+  TimerHandle_t xNtpTimer;
 #endif
 
 #define NTP_SERVER_TASK_NAME "NTPServer"
@@ -27,7 +28,7 @@ void startSyncTasks(int priority){
 #if MASTER_CLOCK
   xTaskCreate(vNtpMasterReceiveTask, NTP_SERVER_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, priority, NULL);
 #else
-  TimerHandle_t xNtpTimer = xTimerCreate(NTP_SYNC_TIMER_NAME, pdMS_TO_TICKS(SYNC_FREQUENCY), pdTRUE, 0, vNtpRequestCallback);
+  xNtpTimer = xTimerCreate(NTP_SYNC_TIMER_NAME, pdMS_TO_TICKS(sync_frequency), pdTRUE, 0, vNtpRequestCallback);
   xTimerStart(xNtpTimer, portMAX_DELAY);
   xTaskCreate(vNtpSlaveReceiveTask, NTP_RECV_TASK_NAME, configMINIMAL_STACK_SIZE, NULL, priority, NULL);
 #endif
@@ -77,6 +78,12 @@ int getNtpSocket(){
 }
 
 #if !MASTER_CLOCK
+
+void changeSyncPeriod(uint32_t period){
+  PRINT_DEBUG("Change NTP sync period to ");
+  PRINT_DEBUGLN(period);
+  xTimerChangePeriod( xNtpTimer, pdMS_TO_TICKS(sync_frequency), 5 );
+}
 
 void vNtpRequestCallback( TimerHandle_t pxTimer ){
   // send mtp request
