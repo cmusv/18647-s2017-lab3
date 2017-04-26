@@ -1,0 +1,229 @@
+[
+    {
+        "id": "a23679e5.f00828",
+        "type": "mqtt in",
+        "z": "116c9aa1.942f25",
+        "name": "",
+        "topic": "application/2/node/+/tx",
+        "qos": "2",
+        "broker": "ca70e3e7.cd881",
+        "x": 144.5,
+        "y": 440,
+        "wires": [
+            [
+                "95c6bfff.fe6b1"
+            ]
+        ]
+    },
+    {
+        "id": "ac9acfee.3c0b5",
+        "type": "tcp out",
+        "z": "116c9aa1.942f25",
+        "host": "",
+        "port": "1991",
+        "beserver": "reply",
+        "base64": false,
+        "end": false,
+        "name": "PowerDue TCP output",
+        "x": 555.5,
+        "y": 596,
+        "wires": []
+    },
+    {
+        "id": "7c15ee8b.825e2",
+        "type": "function",
+        "z": "116c9aa1.942f25",
+        "name": "Get TCP session",
+        "func": "var session_map = context.global.session_map||{};\nvar device_id = msg.payload.device_id;\nvar device_packet = msg.payload.device_packet;\n\n// can only talk to the device that has made a connection\nif(!session_map.hasOwnProperty(device_id)) {\n    return null;\n}\n\nvar session = session_map[device_id];\nmsg._session = session;\nmsg.payload = device_packet;\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 544.5,
+        "y": 528,
+        "wires": [
+            [
+                "ac9acfee.3c0b5",
+                "a9caaa3c.0731f8"
+            ]
+        ]
+    },
+    {
+        "id": "9f66e791.41a3e8",
+        "type": "function",
+        "z": "116c9aa1.942f25",
+        "name": "Get device payload",
+        "func": "var topic = msg.topic;\nvar matches = topic.match(/^application\\/(\\d+)\\/node\\/(.+)\\/tx/);\nvar device_id = matches[2];\nvar buf = Buffer.from(msg.payload.data,\"base64\");\nvar config_id = msg.payload.reference;\n\nmsg.payload = {\n    \"config_id\":config_id,\n    \"app_id\":\"2\",\n    \"device_id\":device_id,\n    \"device_packet\":buf\n}\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 543.5,
+        "y": 441,
+        "wires": [
+            [
+                "7c15ee8b.825e2"
+            ]
+        ]
+    },
+    {
+        "id": "95c6bfff.fe6b1",
+        "type": "json",
+        "z": "116c9aa1.942f25",
+        "name": "",
+        "x": 349.5,
+        "y": 441,
+        "wires": [
+            [
+                "9f66e791.41a3e8"
+            ]
+        ]
+    },
+    {
+        "id": "a9caaa3c.0731f8",
+        "type": "debug",
+        "z": "116c9aa1.942f25",
+        "name": "",
+        "active": true,
+        "console": "false",
+        "complete": "true",
+        "x": 728.5,
+        "y": 528,
+        "wires": []
+    },
+    {
+        "id": "9de3a47e.ad1b98",
+        "type": "mqtt out",
+        "z": "116c9aa1.942f25",
+        "name": "application/2/node/+/rx",
+        "topic": "",
+        "qos": "2",
+        "retain": "",
+        "broker": "ca70e3e7.cd881",
+        "x": 567,
+        "y": 319,
+        "wires": []
+    },
+    {
+        "id": "5aa5b27a.fbf93c",
+        "type": "function",
+        "z": "116c9aa1.942f25",
+        "name": "Wrap to network packet",
+        "func": "var data = Buffer.from(msg.payload).toString(\"base64\");\nvar devEUI = msg.device_id;\n\nmsg.payload = {\n    \"data\":data,\n    \"devEUI\": devEUI\n}\n\nmsg.topic = \"application/2/node/\"+devEUI+\"/rx\";\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 567.5,
+        "y": 246,
+        "wires": [
+            [
+                "9de3a47e.ad1b98",
+                "50f69dd8.f51b14"
+            ]
+        ]
+    },
+    {
+        "id": "50f69dd8.f51b14",
+        "type": "debug",
+        "z": "116c9aa1.942f25",
+        "name": "",
+        "active": false,
+        "console": "false",
+        "complete": "true",
+        "x": 848.5,
+        "y": 249,
+        "wires": []
+    },
+    {
+        "id": "520b401e.54881",
+        "type": "function",
+        "z": "116c9aa1.942f25",
+        "name": "Wrap to device packet",
+        "func": "var buf = Buffer.alloc(4);\nvar device_id = msg.payload.slice(4,12);\n// data field header\nbuf.writeUInt16LE(0xffff, 0);\nbuf.writeUInt16LE(msg.payload.length, 2);\n\n// entire payload left for device to handle\nvar packet = Buffer.concat([buf, msg.payload]);\nmsg.payload = packet;\nmsg.device_id = device_id;\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 557.5,
+        "y": 171,
+        "wires": [
+            [
+                "5aa5b27a.fbf93c"
+            ]
+        ]
+    },
+    {
+        "id": "fbd580a4.93b07",
+        "type": "function",
+        "z": "116c9aa1.942f25",
+        "name": "Assemble app packet",
+        "func": "var PACKET_HEADER = \"F0F0F0F0\";\nvar PACKET_FOOTER = \"F7F7F7F7\";\n\nvar session_id = msg._session.id;\nvar session_map = context.global.session_map||{};\nvar buf = context.global.buf||{};\nvar remain = context.global.remain||{};\n\n\nvar buf_len;\nvar device_id;\nvar len = msg.payload.length;\nvar pktHeaderIndex = msg.payload.indexOf(PACKET_HEADER, \"hex\");\nvar pktFooterIndex = msg.payload.indexOf(PACKET_FOOTER, \"hex\");\n\nif(len > 1460) {\n    // no assemble needed\n    device_id = msg.payload.slice(4, 12).toString();\n    delete session_map[device_id];\n    session_map[device_id] = msg._session;\n    context.global.session_map = session_map;\n    return msg;\n}\n\n\n// naive assemble - by session id\n\n// header found\nif(pktHeaderIndex != -1) {\n    buf_len = msg.payload.readUIntLE(pktHeaderIndex + 4, 2);\n    // header|2 byte len\n    device_id = msg.payload.slice(pktHeaderIndex + 6, pktHeaderIndex + 14).toString();\n    session_map[device_id] = msg._session;\n    context.global.session_map = session_map;\n\n\n    // remove packet_len field\n    buf[session_id] = Buffer.concat([\n        msg.payload.slice(0, pktHeaderIndex+4),\n        msg.payload.slice(pktHeaderIndex+6)]);\n        \n    remain[session_id] = buf_len;\n    \n} else {\n    buf[session_id] = Buffer.concat([buf[session_id], msg.payload]);\n}\n\nremain[session_id] = remain[session_id] - len;\n\ncontext.global.buf = buf;\ncontext.global.remain = remain;\n\nif(remain[session_id] === 0) {\n    msg.payload = buf[session_id];\n    \n    delete context.global.buf[session_id];\n    delete context.global.remain[session_id];\n\n    return msg; \n} else {\n    // if(pktFooterIndex != -1) {\n    //   return msg;  \n    // } else {\n        return null;\n    // }\n}\n\n",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 558,
+        "y": 97,
+        "wires": [
+            [
+                "520b401e.54881",
+                "2ebe353f.73035a"
+            ]
+        ]
+    },
+    {
+        "id": "2ebe353f.73035a",
+        "type": "debug",
+        "z": "116c9aa1.942f25",
+        "name": "",
+        "active": true,
+        "console": "false",
+        "complete": "true",
+        "x": 879,
+        "y": 96,
+        "wires": []
+    },
+    {
+        "id": "20153d58.bf8ea2",
+        "type": "tcp in",
+        "z": "116c9aa1.942f25",
+        "name": "PowerDue TCP Input",
+        "server": "server",
+        "host": "",
+        "port": "1991",
+        "datamode": "stream",
+        "datatype": "buffer",
+        "newline": "",
+        "topic": "",
+        "base64": false,
+        "x": 110,
+        "y": 98,
+        "wires": [
+            [
+                "5c0a1db4.da78d4",
+                "fbd580a4.93b07"
+            ]
+        ]
+    },
+    {
+        "id": "5c0a1db4.da78d4",
+        "type": "debug",
+        "z": "116c9aa1.942f25",
+        "name": "raw_tcp",
+        "active": false,
+        "console": "false",
+        "complete": "true",
+        "x": 324.5,
+        "y": 58,
+        "wires": []
+    },
+    {
+        "id": "ca70e3e7.cd881",
+        "type": "mqtt-broker",
+        "z": "",
+        "broker": "198.199.94.236",
+        "port": "1883",
+        "clientid": "sushi/test",
+        "usetls": false,
+        "compatmode": false,
+        "keepalive": "60",
+        "cleansession": true,
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": ""
+    }
+]

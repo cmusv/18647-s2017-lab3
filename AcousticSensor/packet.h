@@ -12,6 +12,7 @@
 /* this is the packet format to send each time we detect an event */
 struct AcousticEvent_t {
   uint32_t pktHeader;                 // do not modify
+  uint16_t pktLength;                 // set before transmitting, removed before consuming by scope
   char deviceID[DEVICE_ID_LENGTH];    // device unique ID
   uint32_t samplingFrequency;         // rate this device is sampling at
   uint64_t timestamp;                 // sample number of first in buffer

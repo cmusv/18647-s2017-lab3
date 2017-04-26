@@ -7,7 +7,7 @@ ADCTrigger::ADCTrigger(){
   _windowCount = 0;
   _currentIndex = 0;
   _triggerCount = 0;
-  _stdDistance = TRIGGER_DEFAULT_STD_DISTANCE;
+  _stdDistance = trigger_default_std_distance;
 }
 
 void ADCTrigger::feed(uint16_t *buffer, uint16_t len){

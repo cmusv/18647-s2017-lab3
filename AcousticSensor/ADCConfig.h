@@ -17,6 +17,7 @@
 #define WIFI_SSID "PowerDue"
 #define WIFI_PASS "powerdue"
 #define SERVER_IP "10.230.12.1"  // typically the IP of your Laptop (e.g. "10.230.12.1")
+#define SERVER_PORT 1991          // Port of TCP input node of Node-Red flow TCP-MQTT adapter
 
 /*
  * Clock parameters
@@ -40,6 +41,8 @@
 
 #define NTP_TASK_PRIORITY   1   // priority of NTP synchronization tasks
 
+extern uint32_t sync_frequency;
+
 /*
  *  ADCSampler parameters
  */
@@ -53,6 +56,8 @@
 
 #define BUFFERS_TO_SEND 4       // How many buffers to send to the visualizer
 
+extern uint32_t adc_sample_rate;
+
 /*
  * ADCTrigger parameters
  */
@@ -60,6 +65,8 @@
 #define WINDOW_COUNT 8          // How many signal windows to keep track of
 #define MIN_WINDOW_COUNT 24     // How many signal windows to ignore on start up before enabling triggering
 #define TRIGGER_DEFAULT_STD_DISTANCE   20.0f  // default std distance from mean to consider an event
+
+extern float trigger_default_std_distance;
 
 /*
  * Do not modify the following parameters
